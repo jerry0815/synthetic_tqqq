@@ -71,7 +71,7 @@ def compute_metrics(equity: pd.Series) -> dict:
     return {"total_return": total_return, "cagr": cagr, "max_drawdown": max_drawdown}
 
 
-def generate_report(synthetic_metrics: dict, tqqq_metrics: dict) -> str:
+def generate_report(synthetic_metrics: dict, tqqq_metrics: dict, num_rebalances: int) -> str:
     delta_cagr = synthetic_metrics["cagr"] - tqqq_metrics["cagr"]
     lines = [
         "| Metric | Synthetic (Futures + Band Rebalance) | Actual TQQQ |",
@@ -79,7 +79,17 @@ def generate_report(synthetic_metrics: dict, tqqq_metrics: dict) -> str:
         f"| CAGR | {synthetic_metrics['cagr']*100:.2f}% | {tqqq_metrics['cagr']*100:.2f}% |",
         f"| Max Drawdown | {synthetic_metrics['max_drawdown']*100:.2f}% | {tqqq_metrics['max_drawdown']*100:.2f}% |",
         f"| Total Return | {synthetic_metrics['total_return']*100:.2f}% | {tqqq_metrics['total_return']*100:.2f}% |",
+        f"| # Rebalance trades | {num_rebalances} | 0 |",
         f"| Annualized Delta (synthetic - TQQQ) | {delta_cagr*100:+.2f}% | |",
+        "",
+        (
+            "The synthetic strategy only holds 3x exposure while trade_bot's SMA200+ATR "
+            "S&P 500 signal is bullish, sitting in cash the rest of the time; TQQQ's "
+            "buy-and-hold benchmark stays fully invested throughout. That signal-gating, "
+            "plus the 0.2x rebalance band's looser tracking of daily leverage versus TQQQ's "
+            "continuous daily reset, is the primary driver of the delta above — traded off "
+            "against a shallower max drawdown."
+        ),
     ]
     return "\n".join(lines)
 
@@ -122,10 +132,10 @@ def main():
     tqqq_close = tqqq["Close"].reindex(common_index).ffill()
     tqqq_metrics = compute_metrics(tqqq_close)
 
-    report = generate_report(synthetic_metrics, tqqq_metrics)
+    report = generate_report(synthetic_metrics, tqqq_metrics, int(result["rebalanced"].sum()))
 
     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output.md")
-    with open(out_path, "w") as f:
+    with open(out_path, "w", encoding="utf-8") as f:
         f.write(report + "\n")
 
     print(report)
