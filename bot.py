@@ -1,7 +1,10 @@
 """Daily orchestrator for the synthetic 3x QQQ futures tracker."""
 import datetime as dt
+import os
 
-from core import contracts, ledger, rebalance
+import requests
+
+from core import contracts, ledger, pricing, rebalance
 from core import signal as signal_mod
 
 BAND = 0.2
@@ -115,3 +118,37 @@ def format_discord_message(ctx: dict) -> str:
         lines.append("🔺 **Margin usage warning:** projected exposure exceeds the configured safety threshold.")
 
     return "\n".join(lines)
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+STATE_PATH = os.path.join(HERE, "state.json")
+TRADE_BOT_PATH = os.environ.get("TRADE_BOT_PATH", os.path.join(HERE, "trade_bot"))
+
+
+def run_bot():
+    state = ledger.load_state(STATE_PATH)
+    price_info = pricing.fetch_price_and_yield()
+
+    try:
+        signal_stats = signal_mod.fetch_signal(TRADE_BOT_PATH)
+        signal_error = None
+    except Exception as e:
+        signal_stats = {"action": "SELL/CASH"}
+        signal_error = str(e)
+
+    ctx = build_context(state, price_info, signal_stats, price_info["date"])
+    message = format_discord_message(ctx)
+    if signal_error:
+        message += f"\n⚠️ **Signal unavailable — defaulted to defensive.** ({signal_error})"
+
+    webhook_url = os.environ.get("DISCORD_WEBHOOK")
+    if webhook_url:
+        requests.post(webhook_url, json={"content": message})
+    else:
+        print(message)
+
+    ledger.save_state(STATE_PATH, ctx["new_state"])
+
+
+if __name__ == "__main__":
+    run_bot()

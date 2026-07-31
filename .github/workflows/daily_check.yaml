@@ -1,0 +1,44 @@
+name: Synthetic 3x QQQ Monitor
+
+on:
+  schedule:
+    - cron: '35 0 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout synthetic_tqqq
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout trade_bot (signal source)
+        uses: actions/checkout@v4
+        with:
+          repository: jerry0815/trade_bot
+          path: trade_bot
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Bot
+        run: python bot.py
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+
+      - name: Commit updated state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          git diff --quiet --cached || git commit -m "chore: update state.json after daily run"
+          git push
