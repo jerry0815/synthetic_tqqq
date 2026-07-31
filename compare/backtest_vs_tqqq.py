@@ -69,3 +69,67 @@ def compute_metrics(equity: pd.Series) -> dict:
     drawdown = equity / running_max - 1
     max_drawdown = drawdown.min()
     return {"total_return": total_return, "cagr": cagr, "max_drawdown": max_drawdown}
+
+
+def generate_report(synthetic_metrics: dict, tqqq_metrics: dict) -> str:
+    delta_cagr = synthetic_metrics["cagr"] - tqqq_metrics["cagr"]
+    lines = [
+        "| Metric | Synthetic (Futures + Band Rebalance) | Actual TQQQ |",
+        "| --- | ---: | ---: |",
+        f"| CAGR | {synthetic_metrics['cagr']*100:.2f}% | {tqqq_metrics['cagr']*100:.2f}% |",
+        f"| Max Drawdown | {synthetic_metrics['max_drawdown']*100:.2f}% | {tqqq_metrics['max_drawdown']*100:.2f}% |",
+        f"| Total Return | {synthetic_metrics['total_return']*100:.2f}% | {tqqq_metrics['total_return']*100:.2f}% |",
+        f"| Annualized Delta (synthetic - TQQQ) | {delta_cagr*100:+.2f}% | |",
+    ]
+    return "\n".join(lines)
+
+
+def main():
+    import os
+    import sys
+
+    import yfinance as yf
+
+    trade_bot_path = os.environ.get(
+        "TRADE_BOT_PATH",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "trade_bot"),
+    )
+    if trade_bot_path not in sys.path:
+        sys.path.insert(0, trade_bot_path)
+    from backtest.strat_backtest import SMATrendFollowing, get_cached_signals
+
+    gspc = get_cached_signals("^GSPC", sma_window=200)
+    strat = SMATrendFollowing(sma_window=200, t2_confirmation=True)
+    gspc, _ = strat.generate_signals(gspc)
+
+    nq = yf.download("NQ=F", start=TQQQ_INCEPTION, progress=False, auto_adjust=False)
+    tqqq = yf.download("TQQQ", start=TQQQ_INCEPTION, progress=False, auto_adjust=False)
+    irx = yf.download("^IRX", start=TQQQ_INCEPTION, progress=False, auto_adjust=False)
+    for df in (nq, tqqq, irx):
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+    common_index = gspc.index.intersection(nq.index).intersection(irx.index)
+    common_index = common_index[common_index >= pd.Timestamp(TQQQ_INCEPTION)]
+
+    prices = nq["Close"].reindex(common_index).ffill()
+    in_market = gspc["in_market"].reindex(common_index).ffill()
+    tbill = irx["Close"].reindex(common_index).ffill()
+
+    result = simulate(prices, in_market, tbill, initial_equity=200000.0)
+    synthetic_metrics = compute_metrics(result["equity"])
+
+    tqqq_close = tqqq["Close"].reindex(common_index).ffill()
+    tqqq_metrics = compute_metrics(tqqq_close)
+
+    report = generate_report(synthetic_metrics, tqqq_metrics)
+
+    out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output.md")
+    with open(out_path, "w") as f:
+        f.write(report + "\n")
+
+    print(report)
+
+
+if __name__ == "__main__":
+    main()
