@@ -83,3 +83,35 @@ def build_context(state, price_info, signal_stats, today):
         "margin_flag": margin_flag,
         "new_state": new_state,
     }
+
+
+def format_discord_message(ctx: dict) -> str:
+    today_str = ctx["today"].strftime("%Y-%m-%d")
+    action_line = "REBALANCE" if ctx["rebalance_needed"] else "HOLD"
+
+    if ctx["rebalance_needed"]:
+        side = "BUY" if ctx["delta_contracts"] > 0 else "SELL"
+        trade_line = f"{side} {abs(ctx['delta_contracts'])} MNQ contract(s) -> target {ctx['target_contracts']}"
+    else:
+        trade_line = "No trade — within 0.2x band"
+
+    lines = [
+        f"📅 **Synthetic 3x QQQ Monitor ({today_str})**",
+        "--------------------------",
+        f"• Signal: **{ctx['action']}**",
+        f"• Price (MNQ): {ctx['price']:.2f}",
+        f"• Equity: ${ctx['equity']:.2f}",
+        f"• Current Leverage: {ctx['current_leverage']:.2f}x | Target: {ctx['target_leverage']:.1f}x",
+        f"🚩 **ACTION: {action_line}** — {trade_line}",
+    ]
+
+    if ctx["roll"]["should_roll"]:
+        lines.append(
+            f"⚠️ Roll {ctx['roll']['current_symbol']} → {ctx['roll']['next_symbol']} "
+            f"({ctx['roll']['trading_days_left']} trading days left)"
+        )
+
+    if ctx["margin_flag"]:
+        lines.append("🔺 **Margin usage warning:** projected exposure exceeds the configured safety threshold.")
+
+    return "\n".join(lines)
