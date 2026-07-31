@@ -59,3 +59,13 @@ def simulate(
         prior_date = date
 
     return pd.DataFrame(rows).set_index("date")
+
+
+def compute_metrics(equity: pd.Series) -> dict:
+    total_return = equity.iloc[-1] / equity.iloc[0] - 1
+    years = (equity.index[-1] - equity.index[0]).days / 365.25
+    cagr = (equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1 if years > 0 else 0.0
+    running_max = equity.cummax()
+    drawdown = equity / running_max - 1
+    max_drawdown = drawdown.min()
+    return {"total_return": total_return, "cagr": cagr, "max_drawdown": max_drawdown}
