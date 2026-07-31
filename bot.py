@@ -1,6 +1,7 @@
 """Daily orchestrator for the synthetic 3x QQQ futures tracker."""
 import datetime as dt
 import os
+import sys
 
 import requests
 
@@ -40,7 +41,7 @@ def build_context(state, price_info, signal_stats, today):
 
     rebalance_needed = rebalance.should_rebalance(current_leverage, target_leverage, BAND)
     if rebalance_needed:
-        target_contracts = rebalance.compute_target_contracts(target_leverage, equity, point_value, price)
+        target_contracts = max(0, rebalance.compute_target_contracts(target_leverage, equity, point_value, price))
     else:
         target_contracts = prior_contracts_held
     delta_contracts = target_contracts - prior_contracts_held if rebalance_needed else 0
@@ -52,9 +53,12 @@ def build_context(state, price_info, signal_stats, today):
     roll = contracts.roll_status(today, contract_year, contract_month, ROLL_OFFSET_TRADING_DAYS)
 
     final_contracts_held = prior_contracts_held + delta_contracts
-    final_contract_year, final_contract_month = contract_year, contract_month
-    if roll["should_roll"] and final_contracts_held != 0:
+    if final_contracts_held == 0:
+        final_contract_year, final_contract_month = contracts.current_contract_month(today)
+    elif roll["trading_days_left"] <= 0:
         final_contract_year, final_contract_month = roll["next_year"], roll["next_month"]
+    else:
+        final_contract_year, final_contract_month = contract_year, contract_month
 
     position = ledger.apply_fill(prior_contracts_held, delta_contracts, final_contract_year, final_contract_month)
 
@@ -125,9 +129,27 @@ STATE_PATH = os.path.join(HERE, "state.json")
 TRADE_BOT_PATH = os.environ.get("TRADE_BOT_PATH", os.path.join(HERE, "trade_bot"))
 
 
+def _notify(message: str) -> None:
+    webhook_url = os.environ.get("DISCORD_WEBHOOK")
+    if webhook_url:
+        try:
+            response = requests.post(webhook_url, json={"content": message}, timeout=10)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            print(f"Failed to post to Discord: {e}")
+    else:
+        encoding = sys.stdout.encoding or "utf-8"
+        print(message.encode(encoding, errors="replace").decode(encoding))
+
+
 def run_bot():
     state = ledger.load_state(STATE_PATH)
-    price_info = pricing.fetch_price_and_yield()
+
+    try:
+        price_info = pricing.fetch_price_and_yield()
+    except Exception as e:
+        _notify(f"⚠️ **Market data unavailable — no recommendation today.** ({e})")
+        return
 
     try:
         signal_stats = signal_mod.fetch_signal(TRADE_BOT_PATH)
@@ -141,12 +163,7 @@ def run_bot():
     if signal_error:
         message += f"\n⚠️ **Signal unavailable — defaulted to defensive.** ({signal_error})"
 
-    webhook_url = os.environ.get("DISCORD_WEBHOOK")
-    if webhook_url:
-        requests.post(webhook_url, json={"content": message})
-    else:
-        print(message)
-
+    _notify(message)
     ledger.save_state(STATE_PATH, ctx["new_state"])
 
 
