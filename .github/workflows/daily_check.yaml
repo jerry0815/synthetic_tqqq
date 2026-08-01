@@ -1,5 +1,6 @@
 name: Synthetic 3x QQQ Monitor
 
+# Runs after US market close on trading days.
 on:
   schedule:
     - cron: '35 0 * * 1-5'
