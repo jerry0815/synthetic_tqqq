@@ -18,6 +18,16 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           submodules: true
 
+      - name: Checkout state branch
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: state
+          path: state-branch
+
+      - name: Load current state.json from state branch
+        run: cp state-branch/state.json state.json
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -31,8 +41,10 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 
-      - name: Commit updated state
+      - name: Commit updated state to state branch
         run: |
+          cp state.json state-branch/state.json
+          cd state-branch
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add state.json

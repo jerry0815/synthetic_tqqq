@@ -17,7 +17,7 @@ Each trading day, `bot.py`:
 4. Compares current leverage to target; if drift exceeds 0.2x, recommends a BUY/SELL of N contracts.
 5. Flags an upcoming contract roll if within 5 trading days of quarterly expiry.
 6. Posts the combined status to Discord (or prints it locally if `DISCORD_WEBHOOK` isn't set).
-7. Commits the updated `state.json` ledger.
+7. Commits the updated `state.json` ledger — to the **`state` branch**, not `master` (see below).
 
 ## Setup
 
@@ -28,7 +28,13 @@ Each trading day, `bot.py`:
    - `bot.py` and `compare/backtest_vs_tqqq.py` default to `./trade_bot` automatically — no path configuration needed, locally or in CI. Set `TRADE_BOT_PATH` only to override this (e.g. to point at a separate local trade_bot checkout instead of the pinned submodule commit).
    - The submodule pins a specific trade_bot commit. To pick up upstream trade_bot changes: `git submodule update --remote trade_bot`, then commit the updated pointer.
 3. Add a `DISCORD_WEBHOOK` repository secret (Settings > Secrets and variables > Actions) for live notifications. Without it, `bot.py` just prints the message.
-4. The workflow at `.github/workflows/daily_check.yaml` runs automatically on trading days after market close (needs `permissions: contents: write`, already configured, to commit `state.json` back; checks out submodules automatically).
+4. The workflow at `.github/workflows/daily_check.yaml` runs automatically on trading days after market close (needs `permissions: contents: write`, already configured).
+
+## Where `state.json` lives
+
+`state.json` is intentionally **not** tracked on `master` — it lives on a separate orphan `state` branch (`.gitignore`'d locally). Every run checks out `state` into `state-branch/`, copies its `state.json` into the working directory for `bot.py` to read/write, then commits and pushes the updated file back to `state` — so `master`'s commit history stays code-only (no daily "update state.json" noise), while the state still gets full git version history of its own (`git log state -- state.json` shows every day's ledger).
+
+To inspect the current live position: `git show state:state.json` (or `git log state --oneline` for the full history). If you need it locally for manual testing, `git show state:state.json > state.json` pulls the latest snapshot into your working copy (already gitignored, so it won't get committed to `master` by accident).
 
 ## Comparing against TQQQ
 

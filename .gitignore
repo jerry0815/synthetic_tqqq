@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# state.json now lives on the 'state' branch (see .github/workflows/daily_check.yaml),
+# not master, so its history doesn't pollute master's commit log.
+state.json
