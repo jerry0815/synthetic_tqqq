@@ -22,14 +22,13 @@ Each trading day, `bot.py`:
 ## Setup
 
 1. Install dependencies: `pip install -r requirements.txt`
-2. This project depends on [trade_bot](https://github.com/jerry0815/trade_bot) for its trend signal.
-   - **Locally:** clone trade_bot as a sibling directory and set `TRADE_BOT_PATH`, e.g. (PowerShell):
-     ```powershell
-     $env:TRADE_BOT_PATH = "C:\jerry\toy_work\trade_bot"
-     ```
-   - **In GitHub Actions:** already handled — the workflow checks trade_bot out into `./trade_bot`.
+2. This project depends on [trade_bot](https://github.com/jerry0815/trade_bot) for its trend signal, included as a git submodule at `./trade_bot`.
+   - **Cloning fresh:** `git clone --recurse-submodules <this-repo-url>`
+   - **Already cloned:** `git submodule update --init`
+   - `bot.py` and `compare/backtest_vs_tqqq.py` default to `./trade_bot` automatically — no path configuration needed, locally or in CI. Set `TRADE_BOT_PATH` only to override this (e.g. to point at a separate local trade_bot checkout instead of the pinned submodule commit).
+   - The submodule pins a specific trade_bot commit. To pick up upstream trade_bot changes: `git submodule update --remote trade_bot`, then commit the updated pointer.
 3. Add a `DISCORD_WEBHOOK` repository secret (Settings > Secrets and variables > Actions) for live notifications. Without it, `bot.py` just prints the message.
-4. The workflow at `.github/workflows/daily_check.yaml` runs automatically on trading days after market close (needs `permissions: contents: write`, already configured, to commit `state.json` back).
+4. The workflow at `.github/workflows/daily_check.yaml` runs automatically on trading days after market close (needs `permissions: contents: write`, already configured, to commit `state.json` back; checks out submodules automatically).
 
 ## Comparing against TQQQ
 

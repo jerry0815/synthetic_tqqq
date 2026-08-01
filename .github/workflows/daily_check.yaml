@@ -11,16 +11,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout synthetic_tqqq
+      - name: Checkout synthetic_tqqq (with trade_bot submodule)
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Checkout trade_bot (signal source)
-        uses: actions/checkout@v4
-        with:
-          repository: jerry0815/trade_bot
-          path: trade_bot
+          submodules: true
 
       - name: Set up Python
         uses: actions/setup-python@v4

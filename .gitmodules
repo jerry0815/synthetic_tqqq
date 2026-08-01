@@ -1,0 +1,3 @@
+[submodule "trade_bot"]
+	path = trade_bot
+	url = https://github.com/jerry0815/trade_bot.git
